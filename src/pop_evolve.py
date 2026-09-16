@@ -10,10 +10,11 @@ population.py — 人口演化模块
 config 结构（对应 config.yaml 的 population 段）：
     population:
         lambda_rate: 0.03
+        float_ratio: 0.10
+        random_seed: 42
         transitions: {Z2B: 0.045, B2S: 0.10, B2Z: 0.12, S2B: 0.05, S2Z: 0.005}
         death: {Z: 0.035, B: 0.07, S: 0.16}
         migrate_out: 0.008
-        random_seed: 42
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ import warnings
 from typing import List, Dict, Any
 
 
-#状态定义（结构常量，不随情景变化）
+# ===================== 结构常量（不随情景变化） =====================
 STATE_Z = "Z"   # 自理
 STATE_B = "B"   # 半失能
 STATE_S = "S"   # 失能
@@ -53,11 +54,12 @@ class PopulationModel:
         :param config: 完整的 config dict，内部读取 config["population"]
         """
         pop_cfg = config["population"]
- 
-        # 转移概率的均值（中心值），用于生成采样区间
+
+        # 恶化类概率
         self.trans_center = {
             "Z2B": pop_cfg["transitions"]["Z2B"],
             "B2S": pop_cfg["transitions"]["B2S"],
+            # 康复类概率
             "B2Z": pop_cfg["transitions"]["B2Z"],
             "S2B": pop_cfg["transitions"]["S2B"],
             "S2Z": pop_cfg["transitions"]["S2Z"],
@@ -72,8 +74,7 @@ class PopulationModel:
         self.migrate_out_center = pop_cfg["migrate_out"]
         # 新增自理老人比例
         self.lambda_rate = pop_cfg["lambda_rate"]
-
-        # 采样浮动区间：默认取中心值的 ±10%
+        # 采样浮动区间
         self.float_ratio = pop_cfg.get("float_ratio", 0.10)
 
         # 随机种子
@@ -88,13 +89,11 @@ class PopulationModel:
 
         # 恶化类
         for key in ("Z2B", "B2S"):
-            c = self.trans_center[key]
-            p[key] = self._sample(c, self.float_ratio)
+            p[key] = self._sample(self.trans_center[key], self.float_ratio)
 
         # 康复类
         for key in ("B2Z", "S2B", "S2Z"):
-            c = self.trans_center[key]
-            p[key] = self._sample(c, self.float_ratio)
+            p[key] = self._sample(self.trans_center[key], self.float_ratio)
 
         # 死亡类
         for key, c in self.death_center.items():
@@ -244,7 +243,7 @@ class PopulationModel:
         return pd.DataFrame(records)
 
 
-# ===================== 模块级函数接口（兼容旧代码调用） =====================
+# ===================== 模块级函数接口 =====================
 def evolve_population(
     initial_pop: List[Dict[str, float]],
     config: Dict[str, Any],
@@ -252,10 +251,6 @@ def evolve_population(
 ) -> pd.DataFrame:
     """
     函数式接口：一步到位演化 N 年。
-    :param initial_pop: 初始人口
-    :param config: 完整 config dict
-    :param years: 演化年数
-    :return: DataFrame
     """
     model = PopulationModel(config)
     return model.evolve(initial_pop, years=years)
@@ -263,14 +258,17 @@ def evolve_population(
 
 # ===================== 自测 =====================
 if __name__ == "__main__":
-    # 简化的测试 config（实际使用时从 config.yaml 加载）
     test_config = {
         "population": {
             "lambda_rate": 0.03,
-            "transitions": {"Z2B": 0.045, "B2S": 0.10, "B2Z": 0.12, "S2B": 0.05, "S2Z": 0.005},
+            "float_ratio": 0.10,
+            "random_seed": 42,
+            "transitions": {
+                "Z2B": 0.045, "B2S": 0.10,
+                "B2Z": 0.12, "S2B": 0.05, "S2Z": 0.005,
+            },
             "death": {"Z": 0.035, "B": 0.07, "S": 0.16},
             "migrate_out": 0.008,
-            "random_seed": 42,
         }
     }
 
@@ -289,7 +287,6 @@ if __name__ == "__main__":
 
     df = evolve_population(init_pop, test_config, years=5)
 
-    # 年度汇总
     agg = df.groupby("t").agg({"Z": "sum", "B": "sum", "S": "sum"}).reset_index()
     agg["total"] = agg["Z"] + agg["B"] + agg["S"]
     print("\n===== 人口演化汇总 =====")
