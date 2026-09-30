@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 仿真输出（逐年快照不提交）
+simulation_output/*.csv
+# 但 A/B 对照表作为可复现产物保留
+!simulation_output/scenario_AB_compare.csv
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store

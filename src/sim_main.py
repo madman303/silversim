@@ -65,12 +65,19 @@ def run(config: dict, output_dir: str = "simulation_output") -> None:
         m = site_result["metrics"]
         print(f"覆盖率 = {m['coverage_rate']:.2%} | 满足率 = {m['demand_satisfaction_rate']:.2%}")
 
-        # 3. 财务
+        # 3. 财务（容量校验按护理员工时口径，与选址模块的分配口径一致）
         for site in selected_sites:
             fin = finance.calc(
                 scale=site["scale"],
                 monthly_demand=site["monthly_demand_by_service"],
                 price_ratio=config["demand"]["price_ratio"],
+                cid=site["cid"],
+                max_capacity=site["effective_monthly_capacity"],
+                labor_minutes_limit=site["labor_minutes_budget"],
+            )
+            # 展示用的有效容量（含小区系数与新站磨合）
+            site["effective_labor_minutes"] = site["effective_monthly_capacity"] * (
+                finance.avg_service_duration
             )
             site.update(fin)
 
@@ -79,12 +86,15 @@ def run(config: dict, output_dir: str = "simulation_output") -> None:
             print(f"  [{tag}] {s['cid']} {s['scale']} 月利润={s.get('monthly_profit', 0):.2f}")
 
         # 4. 更新站点池（给下一年用）
+        #    站龄：保留的站点年龄 +1；当年新建的站点记 0。
+        #    它决定下一年的"磨合期容量系数"是否继续生效（只有建成当年打 0.8 折）。
         history_sites = [
             {
                 "cid": s["cid"],
                 "scale": s["scale"],
                 "build_cost": s["build_cost"],
-                "build_year": t,
+                "build_year": s.get("build_year", t),
+                "age": 0 if s.get("is_new", True) else s.get("site_age", 1) + 1,
             }
             for s in selected_sites
         ]
@@ -131,6 +141,13 @@ def _save_snapshot(t, pop_array, demand, match_deg, sites, labels, output_dir):
             "monthly_demand": demand_json,
             "monthly_total_demand": round(s.get("monthly_total_demand", 0), 2),
             "monthly_max_capacity": round(s.get("monthly_max_capacity", 0), 2),
+            # 容量工时化（P0-1）：真实约束是护理员分钟，次数上限仅为等权口径展示
+            "labor_minutes_budget": round(s.get("labor_minutes_budget", 0), 2),
+            "labor_minutes_used": round(s.get("labor_minutes_used", 0), 2),
+            "labor_utilization": round(
+                s.get("labor_minutes_used", 0) / s["labor_minutes_budget"], 4
+            ) if s.get("labor_minutes_budget") else 0.0,
+            "binding_constraint": s.get("binding_constraint", ""),
             "monthly_revenue": round(s.get("monthly_revenue", 0), 2),
             "monthly_var_cost": round(s.get("monthly_var_cost", 0), 2),
             "monthly_fixed_cost": round(s.get("monthly_fixed_cost", 0), 2),

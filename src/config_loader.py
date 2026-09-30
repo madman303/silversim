@@ -138,6 +138,20 @@ def validate_config(config: Dict[str, Any]) -> None:
             if scale not in fac[key]:
                 raise ValueError(f"facility.{key} 缺少规模: {scale}")
 
+    # ---------- facility 工时参数（容量工时化，P0-1）----------
+    if "service_duration" not in fac:
+        raise ValueError("facility 缺少字段: service_duration")
+    for name in config["services"]["names"]:
+        if name not in fac["service_duration"]:
+            raise ValueError(f"facility.service_duration 缺少服务: {name}")
+        if fac["service_duration"][name] <= 0:
+            raise ValueError(
+                f"facility.service_duration.{name} 必须 > 0，当前 {fac['service_duration'][name]}"
+            )
+    # 每名护理员每日有效工时不得超过 24 小时
+    if not (0 < fac["nurse_daily_minutes"] <= 1440):
+        raise ValueError("facility.nurse_daily_minutes 应在 (0, 1440] 分钟")
+
     # ---------- services ----------
     svc = config["services"]
     for key in ["names", "revenue", "variable_cost"]:

@@ -44,6 +44,13 @@ site:
   new_site_efficiency: 0.8      # 新站磨合期容量系数
   salvage_ratio: 0.3            # 关停残值回收比例
   work_days_per_month: 22       # 每月运营工作日
+  benchmark_cost_per_demand: 11.4  # 成本效率基准（次/万元），用于归一化成本效率指标
+  allocation_mode: proportional # 工时不足时"先满足谁"：proportional(按需求占比公平削减) / block(先到先得)
+  weights:                      # 选址评分权重（四项合计 1.0）
+    coverage: 0.35              # 覆盖率
+    satisfaction: 0.25          # 平均满意度
+    fulfillment: 0.25           # 需求满足率
+    kept_ratio: 0.15            # 保留上一年已有站点的比例（抑制拆旧建新）
 
 # ---------- 财务测算 ----------
 finance:
@@ -62,14 +69,25 @@ facility:
     小型: 2000
     中型: 3200
     大型: 4400
-  daily_max_capacity:
+  daily_max_capacity:           # 场地口径：每日最大到店/接待人次（不含上门）
     小型: 1000
     中型: 2000
     大型: 3000
-  min_nurse_count:
+  min_nurse_count:              # 人力口径：各规模最少护理员人数
     小型: 2
     中型: 5
     大型: 10
+  # ---------- 容量工时化参数（P0-1）----------
+  # 说明：场地容量只回答"能进多少人"，人力容量才回答"能干多少活"。
+  #       两者取小值作为站点有效容量，避免"2 人一个月干 2.2 万次"的不真实口径。
+  service_duration:             # 单次服务占用护理员的分钟数（工时定额）
+    助餐: 15
+    日间照料: 120
+    上门护理: 60
+    康复理疗: 40
+    助浴: 60
+    紧急救助: 30
+  nurse_daily_minutes: 480      # 每名护理员每日有效工作分钟（8 小时）
 
 # ---------- 服务价格（基准价） ----------
 services:
