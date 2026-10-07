@@ -2,9 +2,9 @@
 
 > 一个可复现的社区养老设施规划仿真工具包，模拟人口演化、需求计算、选址优化与财务测算的完整闭环。
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![Dependencies](https://img.shields.io/badge/dependencies-numpy%20%7C%20pandas%20%7C%20PyYAML-green.svg)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)
 
 ---
 
@@ -12,59 +12,113 @@
 
 中国超过 90% 的城市老人选择居家社区养老，但供给端面临**空间不足、供需错配、经济不可持续、护理员短缺**四重矛盾。街道层面在规划养老服务站时，普遍缺少可以量化推演的工具。
 
-**SilverSim 要回答的核心问题**：在人口结构动态变化、预算有限、人力受限的条件下，社区养老服务站应该建在哪里、建多大、如何定价？
+**SilverSim 要回答的核心问题**：在人口结构动态变化、预算有限、人力受限的条件下，社区养老服务站应该建在哪里、建多大？
 
 ---
 
 ## 二、核心方法
 
-项目把社区养老供给系统抽象为一个**动态演化系统**，围绕这条主线构建：  
-**人口演化 → 需求计算 → 选址分配 → 财务测算 → 反馈下一周期**  
+项目把社区养老供给系统抽象为一个**动态演化系统**，围绕这条主线构建：
 
-| 模块 | 文件 | 回答的问题 |  
-|---|---|---|  
-| 人口演化 | `src/pop_evolve.py` | 老年人健康状态如何逐年变化？ |  
-| 需求计算 | `src/demand_calc.py` | 有多少服务需求能被释放？ |  
-| 选址优化 | `src/site_optimize.py` | 站点建在哪、建多大？ |  
-| 财务测算 | `src/price_subsidy.py` | 每个站能赚钱吗？ |  
+**人口演化 → 需求计算 → 选址与需求分配 → 财务测算 → 站点池反馈下一周期**
+
+| 模块 | 文件 | 回答的问题 |
+|---|---|---|
+| 人口演化 | `src/pop_evolve.py` | 老年人健康状态如何逐年变化？ |
+| 需求计算 | `src/demand_calc.py` | 有多少服务需求能被释放？ |
+| 选址优化 | `src/site_optimize.py` | 站点建在哪、建多大、需求怎么分？ |
+| 财务测算 | `src/price_subsidy.py` | 每个站能不能自持？ |
 | 主循环 | `src/sim_main.py` | 如何调度全部模块？ |
-| 参数配置 | `config.yaml` / `src/config_loader.py` | 换情景要不要改代码？（不需要） |
+| 参数配置 | `config.yaml` + `src/config_loader.py` | 换情景要不要改代码？（不需要） |
 
-### 关键技术点  
+### 关键技术点
 
-- **马尔可夫状态转移**：老年人口按自理/半失能/失能三状态演化，含分层死亡、康复、迁出、随机采样  
-- **四层需求漏斗**：理论需求 → 消费约束 → 付费意愿 → 价格弹性  
-- **枚举选址 + 站点生命周期**：枚举全部 `2^n - 1` 种建站组合，跨年份保留/新增/关停，关停回收 30% 残值  
-- **容量工时化（P0-1）**：站点容量取"场地容量"与"人力容量"的较小值——  
-  场地容量 = 日最大接待人次 × 月工作日（能进多少人）；  
-  人力容量 = 护理员人数 × 每日有效分钟 × 月工作日 ÷ 单次服务工时定额（能干多少活）；  
+- **马尔可夫状态转移**：老年人口按自理 / 半失能 / 失能三状态演化，含分层死亡、康复、迁出与随机采样
+- **四层需求漏斗**：理论需求 → 消费约束 → 付费意愿 → 价格弹性
+- **枚举选址 + 站点生命周期**：枚举全部 `2^n - 1` 种建站组合；跨年份保留 / 新增 / 关停，关停回收 30% 残值
+- **容量工时化**：站点容量取"场地容量"与"人力容量"的较小值——
+  场地容量 = 日最大接待人次 × 月工作日（能进多少人）；
+  人力容量 = 护理员人数 × 每日有效分钟 × 月工作日 ÷ 单次服务工时定额（能干多少活）；
   需求分配按**护理员分钟**记账，15 分钟的助餐与 120 分钟的日间照料不再等价
+- **公平削减分配**：工时不足时按各服务需求工时的占比切片（`proportional` 两遍水分法），避免出现"六类服务里只有助餐拿到容量"
 - **完整成本口径**：固定成本 = 场地管理费 + 护理员工资
 
 ### 一个可讲的结论
 
 工时化之后，全街道 10 个小区的月需求约 13.6 万次，折合 **7,474,385 分钟 = 708 名护理员**。
-而 120 万的年度建设预算最多支撑 2 个大型站（20 人），**首年需求满足率仅 6.81%**——
-供给缺口不是选址问题，是人力配置与支付能力问题。工具的价值在于把这个缺口量化出来，
-而不是给出一个"覆盖 100%"的漂亮数字。
 
-复现对照：`python ab_compare.py`（5 档护理员编制 × 首年方案），输出
-`simulation_output/scenario_AB_compare.csv`。
+- 按课程作业原编制（2/5/10，共 20 人），稳态需求满足率只有 **3.86%**；
+- 按 1:100 照料配比折算（3/10/30，全区 43 人 ≈ 1:160），稳态满足率 **32.52%**
+  （t=0 5.59% → t=5 32.52%，因为 120 万/年的建设预算需要 3~5 年才能建满 10 个站）；
+- 但站均月亏损从 −12.6 万扩大到 −18.6 万。
+
+**结论**：供给缺口不是选址问题。即使按国标配足护理员，仍有约 2/3 的需求无法被覆盖，
+且所有站点在现行价格体系下都不可财务自持——缺口需要支付端政策填补，而不是靠多建站。
+工具的价值在于把这个缺口量化出来，而不是给出一个"覆盖 100%"的漂亮数字。
+
+### 复现与校验
+
+```bash
+python run.py                       # 跑 5 年主循环，结果写入 simulation_output/
+python ab_compare.py                # 5 档护理员编制对照（t=0 与 t=5 双列）
+python -m src.config_loader         # 配置校验
+python -m src.demand_calc           # 需求漏斗自测
+python -m src.price_subsidy         # 财务与超载拦截自测
+python -m src.pop_evolve            # 人口演化自测
+```
+
+对照结果：`simulation_output/scenario_AB_compare.csv`。注意表格里的 **t=0 只建成 2 个站**
+（受年度预算限制），**t=5 才是建满后的稳态**，判读结论请以 t=5 列为准。
 
 ---
 
-## 三、快速开始  
+## 三、快速开始
 
-### 环境要求  
+### 环境要求
 
-- Python 3.10+  
-- 依赖：`numpy`, `pandas`, `matplotlib`, `seaborn`  
+- Python 3.10+
+- 依赖：`numpy`、`pandas`、`PyYAML`（无其他第三方依赖）
 
-### 安装  
+### 安装
 
 ```bash
-git clone https://github.com/yourname/silversim.git  
-cd silversim  
-python -m venv venv  
-source venv/bin/activate      # Windows: venv\Scripts\activate  
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple  
+git clone https://github.com/yourname/silversim.git
+cd silversim
+python -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
+pip install numpy pandas pyyaml
+```
+
+### 修改情景
+
+所有业务参数都在 `config.yaml` 里，**改情景不需要改代码**：
+
+| 想试什么 | 改哪里 |
+|---|---|
+| 换年度建设预算 | `site.annual_build_budget` |
+| 换护理员配置 | `facility.min_nurse_count` |
+| 换单次服务工时 | `facility.service_duration` |
+| 换分配公平性策略 | `site.allocation_mode`（`proportional` / `block`） |
+| 换选址评分权重 | `site.weights` |
+| 换人口演化速度 | `population.*` |
+
+也可以用 `run.py` 的参数临时覆盖：
+
+```bash
+python run.py --years 10 --budget 3000000
+```
+
+---
+
+## 四、已知限制
+
+这些是当前模型**明确尚未处理**的问题，写在最前面避免误读结果：
+
+1. **选址评分缺少成本效率项**：`metrics.cost_efficiency`（次/万元）已计算并输出，但尚未进入评分函数
+2. **距离不影响付费意愿**：距离只影响"选哪个站"，不影响"是否使用服务"；现实中的距离衰减未建模
+3. **需求是乘法漏斗，不是自主决策**：尚未采用 logit 类离散选择模型刻画老人决策
+4. **匹配度仍是单一数字**：未拆分为"需求释放率 / 供给满足率 / 总匹配度"三层
+5. **单年度近视规划**：评分函数没有跨年成本视角，可能偏好"拆旧建新"（已用 `kept_ratio` 权重缓解）
+6. **需求强度偏高**：当前需求矩阵对应每人每月约 1,089 分钟服务（约 18 小时），
+   高于社区居家养老常见量级，这直接决定了"1:100 配比只能覆盖约 10%（静态）"这一结论
+7. **无可视化界面**：结果只有 CSV 与终端日志
